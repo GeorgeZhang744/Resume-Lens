@@ -1,64 +1,129 @@
-import Image from "next/image";
+"use client";
+
+/**
+ * Main page — orchestrates the analyze workflow.
+ *
+ * State management:
+ * - resumeText / jdText: user input (controlled by JDInput)
+ * - isLoading: true while API request is in flight
+ * - error: user-facing message if validation or API fails
+ * - result: AnalyzeResponse shown by ResultCard after success
+ *
+ * API flow:
+ * 1. User clicks Analyze → handleAnalyze()
+ * 2. Client-side validation (minimum length)
+ * 3. analyzeJobMatch() in lib/api.ts POSTs to backend
+ * 4. On success, result state updates and ResultCard renders
+ */
+
+import { useState } from "react";
+
+import AnalyzeButton from "@/components/AnalyzeButton";
+import JDInput from "@/components/JDInput";
+import ResultCard from "@/components/ResultCard";
+import { analyzeJobMatch } from "@/lib/api";
+import type { AnalyzeResponse } from "@/lib/types";
+
+const MIN_TEXT_LENGTH = 30;
 
 export default function Home() {
+  const [resumeText, setResumeText] = useState("");
+  const [jdText, setJdText] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<AnalyzeResponse | null>(null);
+
+  const resumeValid = resumeText.trim().length >= MIN_TEXT_LENGTH;
+  const jdValid = jdText.trim().length >= MIN_TEXT_LENGTH;
+  const canSubmit = resumeValid && jdValid && !isLoading;
+
+  async function handleAnalyze() {
+    setError(null);
+    setResult(null);
+
+    if (!resumeValid || !jdValid) {
+      setError(
+        `Please enter at least ${MIN_TEXT_LENGTH} characters in both fields.`
+      );
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const data = await analyzeJobMatch({
+        resume_text: resumeText.trim(),
+        jd_text: jdText.trim(),
+      });
+      setResult(data);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Something went wrong.";
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-full bg-zinc-50">
+      <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+        <header className="mb-8">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
+            AI Job Match Agent
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="mt-2 text-sm text-zinc-600">
+            Paste your resume and a job description to see how well they match.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+        </header>
+
+        <div className="flex flex-col gap-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <JDInput
+            id="resume"
+            label="Resume"
+            placeholder="Paste your resume text here…"
+            value={resumeText}
+            onChange={setResumeText}
+            minLength={MIN_TEXT_LENGTH}
+          />
+
+          <JDInput
+            id="job-description"
+            label="Job Description"
+            placeholder="Paste the job description here…"
+            value={jdText}
+            onChange={setJdText}
+            minLength={MIN_TEXT_LENGTH}
+          />
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <AnalyzeButton
+              onClick={handleAnalyze}
+              isLoading={isLoading}
+              disabled={!canSubmit}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            {isLoading && (
+              <p className="text-sm text-zinc-500" role="status">
+                Analyzing your resume against the job description…
+              </p>
+            )}
+          </div>
+
+          {error && (
+            <p
+              className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+              role="alert"
+            >
+              {error}
+            </p>
+          )}
         </div>
+
+        {result && (
+          <div className="mt-8">
+            <ResultCard result={result} />
+          </div>
+        )}
       </main>
     </div>
   );
