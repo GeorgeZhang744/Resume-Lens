@@ -1,17 +1,23 @@
 """
 API route definitions.
 
-This module holds FastAPI APIRouter instances. Routers keep endpoints
-organized and separate from app setup in main.py.
+Analyze flow:
+1. matcher.match_resume_to_jd() — rule-based score & skills (no LLM)
+2. bullet_rewriter.rewrite_resume_bullets() — ONE LLM call for bullets only
+3. report_generator.generate_report() — markdown report from match + bullets
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
-# Router for public endpoints (root + health checks)
-root_router = APIRouter(tags=["root"])
+from app.api.schemas import AnalyzeRequest, AnalyzeResponse, ResumeParseResponse
+from app.services.resume_parser import ResumeParseError, parse_resume_file
+from app.config import OPENAI_API_KEY
+from app.services.bullet_rewriter import rewrite_resume_bullets
+from app.services.matcher import match_resume_to_jd
+from app.services.report_generator import generate_report
 
-# Router for future REST API endpoints (mounted at /api in main.py)
+root_router = APIRouter(tags=["root"])
 api_router = APIRouter(tags=["api"])
 
 
@@ -39,32 +45,62 @@ def health_check() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
-class AnalyzeRequest(BaseModel):
-    """Body for POST /api/analyze."""
+@api_router.post("/resume/parse", response_model=ResumeParseResponse)
+async def parse_resume(file: UploadFile = File(...)) -> ResumeParseResponse:
+    """
+    Accept a PDF or DOCX resume, extract text, return JSON for the frontend.
 
-    resume_text: str
-    jd_text: str
+    Uses multipart/form-data with field name 'file'.
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided.")
 
+    content = await file.read()
 
-class AnalyzeResponse(BaseModel):
-    """Mock analyze result until AI logic is added."""
+    try:
+        resume_text = parse_resume_file(file.filename, content)
+    except ResumeParseError as exc:
+        raise HTTPException(status_code=400, detail=exc.message) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to parse resume: {exc}",
+        ) from exc
 
-    match_score: int
-    matched_skills: list[str]
-    missing_skills: list[str]
-    rewritten_bullets: list[str]
-    final_report: str
+    return ResumeParseResponse(resume_text=resume_text)
 
 
 @api_router.post("/analyze", response_model=AnalyzeResponse)
 def analyze_job_match(body: AnalyzeRequest) -> AnalyzeResponse:
-    """Mock job match analysis for frontend MVP."""
+    """
+    Analyze resume vs job description.
+
+    Scoring is rule-based; only bullet rewriting uses the LLM.
+    """
+    if not OPENAI_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="OPENAI_API_KEY is not configured. Add it to backend/.env.",
+        )
+
+    # Step 1: deterministic matching (no tokens)
+    match_result = match_resume_to_jd(body.resume_text, body.jd_text)
+
+    # Step 2: single LLM call for rewritten bullets
+    bullets = rewrite_resume_bullets(
+        resume_text=body.resume_text,
+        jd_text=body.jd_text,
+        matched_skills=match_result["matched_skills"],
+        missing_skills=match_result["missing_skills"],
+    )
+
+    # Step 3: report uses match data + AI bullets (no extra LLM call)
+    report = generate_report(match_result, bullets)
+
     return AnalyzeResponse(
-        match_score=80,
-        matched_skills=["Python", "FastAPI"],
-        missing_skills=["LangGraph"],
-        rewritten_bullets=[
-            "Built backend APIs using FastAPI to support AI-powered resume analysis."
-        ],
-        final_report="This is a mock job match report.",
+        match_score=match_result["match_score"],
+        matched_skills=match_result["matched_skills"],
+        missing_skills=match_result["missing_skills"],
+        rewritten_bullets=bullets,
+        final_report=report,
     )
