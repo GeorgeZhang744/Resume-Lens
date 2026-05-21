@@ -17,6 +17,8 @@ from app.agents.graph import analyze_graph
 from app.api.schemas import (
     AnalyzeRequest,
     AnalyzeResponse,
+    ChatRequest,
+    ChatResponse,
     HealthResponse,
     ResumeParseResponse,
     RootResponse,
@@ -174,6 +176,7 @@ def analyze_job_match(body: AnalyzeRequest) -> AnalyzeResponse:
     ip_data     = tool_results.get("prepare_interview_questions_tool", {})
 
     return AnalyzeResponse(
+        thread_id          = thread_id,
         match_score        = match_data.get("match_score", 0),
         matched_skills     = match_data.get("matched_skills", []),
         missing_skills     = match_data.get("missing_skills", []),
@@ -183,6 +186,36 @@ def analyze_job_match(body: AnalyzeRequest) -> AnalyzeResponse:
         technical_questions  = ip_data.get("technical_questions", []),
         behavioral_questions = ip_data.get("behavioral_questions", []),
         study_topics         = ip_data.get("study_topics", []),
-        # The agent's final message replaces the old deterministic markdown report
         final_report = agent_summary,
     )
+
+
+@api_router.post("/chat", response_model=ChatResponse)
+def chat(body: ChatRequest) -> ChatResponse:
+    """
+    Send a follow-up message to an existing analysis thread.
+
+    The agent already has the full context from the original analysis
+    (resume, JD, tool results) stored in the SQLite checkpoint. It picks
+    up the thread and responds without needing any of that repeated.
+
+    Example follow-ups:
+      "Make the cover letter more formal."
+      "Add more detail about my Python experience in the bullets."
+      "What should I study first given my skill gaps?"
+    """
+    if not OPENAI_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="OPENAI_API_KEY is not configured. Add it to backend/.env.",
+        )
+
+    config = {"configurable": {"thread_id": body.thread_id}}
+
+    final_state = analyze_graph.invoke(
+        {"messages": [("human", body.message)]},
+        config=config,
+    )
+
+    reply = _get_agent_summary(final_state["messages"])
+    return ChatResponse(reply=reply or "I'm not sure how to help with that.")
