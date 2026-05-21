@@ -12,6 +12,11 @@ v2 — Tool-calling agent (this file):
      It decides which tools to call, in what order, and with what arguments.
      This is the inversion that makes it a genuine agent.
 
+v3 — Persistent checkpointer (current):
+     A SqliteSaver checkpointer is attached so every agent run is persisted to
+     checkpoints.db. routes.py passes a unique thread_id per request, keeping
+     each analysis independent while making the full message history replayable.
+
 How it works
 ────────────
 1. routes.py sends a single natural-language goal message to the agent.
@@ -25,8 +30,12 @@ The self-critique loop is preserved — it lives inside rewrite_resume_bullets_t
 so bullet quality is always gate-checked regardless of which path the agent takes.
 """
 
+import sqlite3
+from pathlib import Path
+
 from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.prebuilt import create_react_agent
 
 from app.agents.agent_tools import AGENT_TOOLS
@@ -77,7 +86,21 @@ _llm = ChatOpenAI(
     temperature=0.3,
 )
 
+# SQLite checkpointer ─────────────────────────────────────────────────────────
+# Persists the full message history for every agent run to checkpoints.db.
+# check_same_thread=False is required because FastAPI may dispatch requests
+# from different threads while sharing this single connection object.
+# The DB file lives at backend/checkpoints.db (already in .gitignore via *.db).
+_DB_PATH = Path(__file__).parent.parent.parent / "checkpoints.db"
+_conn = sqlite3.connect(str(_DB_PATH), check_same_thread=False)
+_checkpointer = SqliteSaver(_conn)
+
 # The compiled agent — exported as analyze_graph so routes.py requires no
-# import changes. The invocation format changes (messages instead of state
-# dict), but the import path stays the same.
-analyze_graph = create_react_agent(_llm, AGENT_TOOLS, prompt=_add_system_prompt)
+# import changes. The checkpointer is transparent to callers: routes.py just
+# needs to pass config={"configurable": {"thread_id": <id>}} on each invoke.
+analyze_graph = create_react_agent(
+    _llm,
+    AGENT_TOOLS,
+    prompt=_add_system_prompt,
+    checkpointer=_checkpointer,
+)

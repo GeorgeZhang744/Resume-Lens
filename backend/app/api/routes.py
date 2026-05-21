@@ -8,6 +8,7 @@ them to the AnalyzeResponse schema.
 """
 
 import json
+import uuid
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from langchain_core.messages import AIMessage, ToolMessage
@@ -152,8 +153,13 @@ def analyze_job_match(body: AnalyzeRequest) -> AnalyzeResponse:
         f"Job Description:\n{body.jd_text}"
     )
 
+    # Each analysis gets its own thread so runs are independent but all persisted.
+    # The thread_id is a UUID generated per request — no two analyses share state.
+    thread_id = str(uuid.uuid4())
+    config = {"configurable": {"thread_id": thread_id}}
+
     # Invoke the agent — returns {"messages": [HumanMessage, AIMessage, ToolMessage, ...]}
-    final_state = analyze_graph.invoke({"messages": [("human", goal_message)]})
+    final_state = analyze_graph.invoke({"messages": [("human", goal_message)]}, config=config)
 
     messages = final_state["messages"]
 

@@ -7,6 +7,7 @@
 
 import { useState } from "react";
 
+import { exportToPdf } from "@/lib/exportPdf";
 import type { AnalyzeResponse } from "@/lib/types";
 
 interface ResultCardProps {
@@ -101,11 +102,30 @@ function CoverLetterCard({ text }: { text: string }) {
 }
 
 export default function ResultCard({ result }: ResultCardProps) {
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    setExporting(true);
+    // Defer to next tick so the button state renders before the (sync) PDF work blocks
+    await new Promise((r) => setTimeout(r, 0));
+    exportToPdf(result);
+    setExporting(false);
+  }
+
   return (
     <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-      <h2 className="mb-6 text-lg font-semibold text-zinc-900">
-        Analysis Results
-      </h2>
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-zinc-900">
+          Analysis Results
+        </h2>
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="rounded-md px-3 py-1.5 text-xs font-medium text-zinc-600 ring-1 ring-inset ring-zinc-200 transition hover:bg-zinc-50 hover:text-zinc-800 disabled:opacity-50"
+        >
+          {exporting ? "Exporting…" : "Export PDF"}
+        </button>
+      </div>
 
       <div className="mb-6 flex items-baseline gap-2">
         <span className="text-sm font-medium text-zinc-600">Match Score</span>
