@@ -50,6 +50,28 @@ function SkillList({
   );
 }
 
+function QuestionList({
+  title,
+  items,
+}: {
+  title: string;
+  items: string[];
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div>
+      <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+        {title}
+      </h4>
+      <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-700">
+        {items.map((item, i) => (
+          <li key={i}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function CoverLetterCard({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -109,9 +131,16 @@ export default function ResultCard({ result }: ResultCardProps) {
         />
 
         <div>
-          <h3 className="mb-2 text-sm font-semibold text-zinc-800">
-            Rewritten Bullets
-          </h3>
+          <div className="mb-2 flex items-center gap-3">
+            <h3 className="text-sm font-semibold text-zinc-800">
+              Rewritten Bullets
+            </h3>
+            {result.critique_score > 0 && (
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
+                AI quality score: {result.critique_score}/10
+              </span>
+            )}
+          </div>
           <ul className="list-disc space-y-2 pl-5 text-sm text-zinc-700">
             {result.rewritten_bullets.map((bullet, index) => (
               <li key={`${index}-${bullet.slice(0, 24)}`}>{bullet}</li>
@@ -121,6 +150,30 @@ export default function ResultCard({ result }: ResultCardProps) {
 
         {result.cover_letter && (
           <CoverLetterCard text={result.cover_letter} />
+        )}
+
+        {(result.technical_questions.length > 0 ||
+          result.behavioral_questions.length > 0 ||
+          result.study_topics.length > 0) && (
+          <div>
+            <h3 className="mb-3 text-sm font-semibold text-zinc-800">
+              Interview Prep
+            </h3>
+            <div className="flex flex-col gap-4 rounded-lg bg-zinc-50 p-4">
+              <QuestionList
+                title="Technical Questions"
+                items={result.technical_questions}
+              />
+              <QuestionList
+                title="Behavioral Questions"
+                items={result.behavioral_questions}
+              />
+              <QuestionList
+                title="Study Topics"
+                items={result.study_topics}
+              />
+            </div>
+          </div>
         )}
       </div>
     </section>

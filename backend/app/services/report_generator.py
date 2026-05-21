@@ -9,6 +9,10 @@ def generate_report(
     llm_success: bool = True,
     cover_letter: str = "",
     cover_letter_success: bool = True,
+    technical_questions: list[str] | None = None,
+    behavioral_questions: list[str] | None = None,
+    study_topics: list[str] | None = None,
+    interview_prep_success: bool = True,
 ) -> str:
     """
     Assemble a readable report for the frontend / API response.
@@ -76,6 +80,27 @@ def generate_report(
         )
         cover_letter_section = f"\n## Cover Letter\n{cl_notice}{cover_letter}\n"
 
+    interview_prep_section = ""
+    tech_qs = technical_questions or []
+    behav_qs = behavioral_questions or []
+    topics = study_topics or []
+    if tech_qs or behav_qs or topics:
+        ip_notice = (
+            "_AI interview prep generation was temporarily unavailable. "
+            "Fallback suggestions were generated._\n\n"
+            if not interview_prep_success
+            else ""
+        )
+        tech_lines = "\n".join(f"- {q}" for q in tech_qs)
+        behav_lines = "\n".join(f"- {q}" for q in behav_qs)
+        topic_lines = "\n".join(f"- {t}" for t in topics)
+        interview_prep_section = (
+            f"\n## Interview Prep\n{ip_notice}"
+            f"### Technical Questions\n{tech_lines}\n\n"
+            f"### Behavioral Questions\n{behav_lines}\n\n"
+            f"### Study Topics\n{topic_lines}\n"
+        )
+
     return f"""# Job Match Report
 
 {fallback_notice}## Match Score
@@ -92,4 +117,4 @@ def generate_report(
 
 ## Rewritten Resume Bullets
 {bullet_lines}
-{cover_letter_section}"""
+{cover_letter_section}{interview_prep_section}"""

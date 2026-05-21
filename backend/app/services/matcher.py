@@ -1,68 +1,28 @@
 """
-Rule-based skill extraction and resume–JD matching.
+LLM-based skill extraction and resume–JD matching.
 
-No LLM: we scan text for known skill keywords and compute overlap.
+Replaces the previous rule-based keyword scanner.
+
+Why LLM?
+- No fixed vocabulary: works for any tech stack, not just the 32 skills we
+  hand-coded before.
+- Semantic matching: "ML" on a resume correctly matches "Machine Learning" in
+  the JD without an alias table.
+- Normalisation is automatic: the model returns consistent display names
+  regardless of how the candidate wrote them.
+
+Fallback:
+  If the LLM call or JSON parsing fails, an empty MatchResult is returned so
+  the rest of the agent pipeline can still proceed gracefully.
 """
 
-import re
+import logging
 from typing import TypedDict
 
-# Canonical skills we look for in resume and job description text
-SKILLS: list[str] = [
-    "python",
-    "java",
-    "c++",
-    "javascript",
-    "typescript",
-    "react",
-    "node.js",
-    "express.js",
-    "sql",
-    "postgres",
-    "mongodb",
-    "docker",
-    "rest api",
-    "fastapi",
-    "machine learning",
-    "pytorch",
-    "langgraph",
-    "openai",
-    "llm",
-    "rag",
-]
+from app.prompts.matcher_prompt import SYSTEM_PROMPT, build_matcher_prompt
+from app.services.llm_service import LLMServiceError, generate_json
 
-# Short forms → canonical skill name (must exist in SKILLS)
-ALIASES: dict[str, str] = {
-    "js": "javascript",
-    "node": "node.js",
-    "postgresql": "postgres",
-    "ml": "machine learning",
-    "llms": "llm",
-}
-
-# Pretty labels for API / UI (canonical key → display string)
-DISPLAY_NAMES: dict[str, str] = {
-    "python": "Python",
-    "java": "Java",
-    "c++": "C++",
-    "javascript": "JavaScript",
-    "typescript": "TypeScript",
-    "react": "React",
-    "node.js": "Node.js",
-    "express.js": "Express.js",
-    "sql": "SQL",
-    "postgres": "PostgreSQL",
-    "mongodb": "MongoDB",
-    "docker": "Docker",
-    "rest api": "REST API",
-    "fastapi": "FastAPI",
-    "machine learning": "Machine Learning",
-    "pytorch": "PyTorch",
-    "langgraph": "LangGraph",
-    "openai": "OpenAI",
-    "llm": "LLM",
-    "rag": "RAG",
-}
+logger = logging.getLogger(__name__)
 
 
 class MatchResult(TypedDict):
@@ -75,79 +35,57 @@ class MatchResult(TypedDict):
     jd_skills: list[str]
 
 
-def normalize_skill(skill: str) -> str:
-    """
-    Lowercase and map aliases (e.g. 'js' → 'javascript').
-    Unknown tokens are returned lowercased as-is.
-    """
-    cleaned = skill.strip().lower()
-    return ALIASES.get(cleaned, cleaned)
+def _safe_str_list(value: object) -> list[str]:
+    """Coerce a JSON value to a flat list of non-empty strings."""
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if item]
 
 
-def display_skill(skill: str) -> str:
-    """Convert canonical skill id to a human-readable label."""
-    canonical = normalize_skill(skill)
-    return DISPLAY_NAMES.get(canonical, canonical.title())
-
-
-def extract_skills(text: str) -> list[str]:
-    """
-    Find skills mentioned in text.
-
-    1. Match longer phrases first (e.g. 'machine learning' before 'learning').
-    2. Then check alias tokens with word boundaries to reduce false positives.
-    """
-    text_lower = text.lower()
-    found_set: set[str] = set()
-    found_order: list[str] = []
-
-    def add_canonical(canonical: str) -> None:
-        if canonical in SKILLS and canonical not in found_set:
-            found_set.add(canonical)
-            found_order.append(canonical)
-
-    # Pass 1: direct keyword match (longest skills first)
-    for skill in sorted(SKILLS, key=len, reverse=True):
-        if skill in text_lower:
-            add_canonical(skill)
-
-    # Pass 2: alias match (e.g. "js" as a whole token, not inside "projects")
-    for alias, canonical in ALIASES.items():
-        if canonical in found_set:
-            continue
-        # Boundaries: alias not glued to other letters/digits (allow dots for node.js-style)
-        pattern = rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])"
-        if re.search(pattern, text_lower):
-            add_canonical(canonical)
-
-    return found_order
+def _fallback_match() -> MatchResult:
+    """Safe empty result returned when the LLM call fails."""
+    return {
+        "match_score": 0,
+        "matched_skills": [],
+        "missing_skills": [],
+        "resume_skills": [],
+        "jd_skills": [],
+    }
 
 
 def match_resume_to_jd(resume_text: str, jd_text: str) -> MatchResult:
     """
-    Compare resume skills to job-description skills.
+    Compare resume skills to job-description skills using an LLM.
 
-    match_score = (matched JD skills / total JD skills) × 100
+    A single GPT call extracts, normalises, and semantically matches all
+    technical skills from both documents. The match_score is recomputed
+    server-side to guard against model arithmetic errors.
+
+    Returns a MatchResult with safe defaults if the LLM call fails.
     """
-    resume_skills = extract_skills(resume_text)
-    jd_skills = extract_skills(jd_text)
+    try:
+        data = generate_json(
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=build_matcher_prompt(resume_text, jd_text),
+            temperature=0.0,  # deterministic extraction
+        )
+    except (LLMServiceError, ValueError) as exc:
+        logger.warning("LLM skill extraction failed — returning empty result: %s", exc)
+        return _fallback_match()
 
-    resume_set = set(resume_skills)
+    resume_skills  = _safe_str_list(data.get("resume_skills"))
+    jd_skills      = _safe_str_list(data.get("jd_skills"))
+    matched_skills = _safe_str_list(data.get("matched_skills"))
+    missing_skills = _safe_str_list(data.get("missing_skills"))
 
-    # Preserve JD order for stable output
-    matched_canonical = [s for s in jd_skills if s in resume_set]
-    missing_canonical = [s for s in jd_skills if s not in resume_set]
-
-    total_jd = len(jd_skills)
-    if total_jd == 0:
-        match_score = 0
-    else:
-        match_score = round(len(matched_canonical) / total_jd * 100)
+    # Recompute score server-side — don't trust LLM arithmetic
+    total_jd   = len(jd_skills)
+    match_score = round(len(matched_skills) / total_jd * 100) if total_jd else 0
 
     return {
-        "match_score": match_score,
-        "matched_skills": [display_skill(s) for s in matched_canonical],
-        "missing_skills": [display_skill(s) for s in missing_canonical],
-        "resume_skills": [display_skill(s) for s in resume_skills],
-        "jd_skills": [display_skill(s) for s in jd_skills],
+        "match_score":    match_score,
+        "matched_skills": matched_skills,
+        "missing_skills": missing_skills,
+        "resume_skills":  resume_skills,
+        "jd_skills":      jd_skills,
     }

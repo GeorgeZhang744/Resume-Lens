@@ -32,7 +32,11 @@ class AnalyzeResponse(BaseModel):
     matched_skills: list[str]
     missing_skills: list[str]
     rewritten_bullets: list[str]
+    critique_score: int
     cover_letter: str
+    technical_questions: list[str]
+    behavioral_questions: list[str]
+    study_topics: list[str]
     final_report: str
 
 
@@ -40,6 +44,49 @@ class ResumeParseResponse(BaseModel):
     """JSON returned after POST /api/resume/parse."""
 
     resume_text: str
+
+
+class CritiqueResponse(BaseModel):
+    """Validated shape of the LLM JSON response for bullet critique."""
+
+    verdict: str
+    score: int = Field(..., ge=1, le=10, description="Quality score 1–10")
+    issues: list[str] = Field(default_factory=list)
+
+    @field_validator("verdict")
+    @classmethod
+    def verdict_must_be_valid(cls, v: str) -> str:
+        v = v.strip().lower()
+        if v not in ("accept", "retry"):
+            raise ValueError("verdict must be 'accept' or 'retry'")
+        return v
+
+    @field_validator("issues")
+    @classmethod
+    def strip_empty_issues(cls, items: list[str]) -> list[str]:
+        return [item.strip() for item in items if item.strip()]
+
+
+class InterviewPrepResponse(BaseModel):
+    """Validated shape of the LLM JSON response for interview prep generation."""
+
+    technical_questions: list[str] = Field(
+        ..., min_length=3, max_length=5, description="3–5 technical interview questions"
+    )
+    behavioral_questions: list[str] = Field(
+        ..., min_length=3, max_length=5, description="3–5 behavioral interview questions"
+    )
+    study_topics: list[str] = Field(
+        ..., min_length=3, max_length=5, description="3–5 study topics based on skill gaps"
+    )
+
+    @field_validator("technical_questions", "behavioral_questions", "study_topics")
+    @classmethod
+    def items_must_be_non_empty(cls, items: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in items]
+        if any(not item for item in cleaned):
+            raise ValueError("Each item must be a non-empty string.")
+        return cleaned
 
 
 class CoverLetterResponse(BaseModel):

@@ -68,9 +68,13 @@ def rewrite_resume_bullets(
     jd_text: str,
     matched_skills: list[str],
     missing_skills: list[str],
+    critique_feedback: list[str] | None = None,
 ) -> RewriteBulletsResult:
     """
     Rewrite bullets via structured JSON + Pydantic validation.
+
+    critique_feedback: issues from a previous critique pass injected into the
+    prompt so the LLM knows exactly what to fix on a retry attempt.
 
     On API, JSON, or validation failure → fallback bullets, llm_success=False.
     """
@@ -80,6 +84,7 @@ def rewrite_resume_bullets(
         jd_text=jd_text,
         matched_skills=matched_skills,
         missing_skills=missing_skills,
+        critique_feedback=critique_feedback,
     )
 
     try:

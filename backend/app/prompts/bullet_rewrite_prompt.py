@@ -40,17 +40,33 @@ def build_bullet_rewrite_prompt(
     jd_text: str,
     matched_skills: list[str],
     missing_skills: list[str],
+    critique_feedback: list[str] | None = None,
 ) -> str:
-    """Build the user message for structured JSON bullet rewriting."""
+    """
+    Build the user message for structured JSON bullet rewriting.
+
+    If critique_feedback is provided, this is a retry attempt — the specific
+    issues from the previous critique are injected so the LLM fixes them.
+    """
     resume = _truncate(resume_text, MAX_RESUME_CHARS)
     jd = _truncate(jd_text, MAX_JD_CHARS)
 
     matched = ", ".join(matched_skills) if matched_skills else "None detected"
     missing = ", ".join(missing_skills) if missing_skills else "None"
 
+    # On retry: prepend the critique issues so the LLM knows exactly what to fix
+    feedback_section = ""
+    if critique_feedback:
+        issues = "\n".join(f"- {issue}" for issue in critique_feedback)
+        feedback_section = f"""IMPORTANT — This is a retry. A previous attempt was reviewed and rejected.
+Fix ALL of these specific issues in your new attempt:
+{issues}
+
+"""
+
     return f"""Rewrite resume bullets for this job application.
 
-Resume (source facts — do not invent beyond this):
+{feedback_section}Resume (source facts — do not invent beyond this):
 {resume}
 
 Job description:
