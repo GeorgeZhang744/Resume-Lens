@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 
 import { sendChatMessage } from "@/lib/api";
 import type { AnalyzeResponse, ChatMessage } from "@/lib/types";
@@ -111,7 +112,23 @@ export default function ChatPanel({ threadId, onUpdate }: ChatPanelProps) {
                   : "bg-zinc-100 text-zinc-800"
               }`}
             >
-              {msg.text}
+              {msg.role === "user" ? (
+                msg.text
+              ) : (
+                <ReactMarkdown
+                  components={{
+                    p:      ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                    ul:     ({ children }) => <ul className="mb-2 list-disc space-y-1 pl-4 last:mb-0">{children}</ul>,
+                    ol:     ({ children }) => <ol className="mb-2 list-decimal space-y-1 pl-4 last:mb-0">{children}</ol>,
+                    li:     ({ children }) => <li>{children}</li>,
+                    strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                    em:     ({ children }) => <em className="italic">{children}</em>,
+                    code:   ({ children }) => <code className="rounded bg-zinc-200 px-1 py-0.5 font-mono text-xs">{children}</code>,
+                  }}
+                >
+                  {msg.text}
+                </ReactMarkdown>
+              )}
             </div>
           </div>
         ))}
