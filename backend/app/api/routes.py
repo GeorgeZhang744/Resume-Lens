@@ -1,36 +1,25 @@
 """
 API route definitions.
 
-Analyze flow:
-1. matcher.match_resume_to_jd() — rule-based score & skills (no LLM)
-2. bullet_rewriter.rewrite_resume_bullets() — ONE LLM call for bullets only
-3. report_generator.generate_report() — markdown report from match + bullets
+Analyze flow is orchestrated by LangGraph (app/agents/graph.py).
+Resume parsing still uses the resume_parser service directly.
 """
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from pydantic import BaseModel
 
-from app.api.schemas import AnalyzeRequest, AnalyzeResponse, ResumeParseResponse
-from app.services.resume_parser import ResumeParseError, parse_resume_file
+from app.agents.graph import analyze_graph
+from app.api.schemas import (
+    AnalyzeRequest,
+    AnalyzeResponse,
+    HealthResponse,
+    ResumeParseResponse,
+    RootResponse,
+)
 from app.config import OPENAI_API_KEY
-from app.services.bullet_rewriter import rewrite_resume_bullets
-from app.services.matcher import match_resume_to_jd
-from app.services.report_generator import generate_report
+from app.services.resume_parser import ResumeParseError, parse_resume_file
 
 root_router = APIRouter(tags=["root"])
 api_router = APIRouter(tags=["api"])
-
-
-class RootResponse(BaseModel):
-    """Response body for GET /."""
-
-    message: str
-
-
-class HealthResponse(BaseModel):
-    """Response body for GET /health."""
-
-    status: str
 
 
 @root_router.get("/", response_model=RootResponse)
@@ -73,9 +62,7 @@ async def parse_resume(file: UploadFile = File(...)) -> ResumeParseResponse:
 @api_router.post("/analyze", response_model=AnalyzeResponse)
 def analyze_job_match(body: AnalyzeRequest) -> AnalyzeResponse:
     """
-    Analyze resume vs job description.
-
-    Scoring is rule-based; only bullet rewriting uses the LLM.
+    Run the LangGraph analyze workflow and return the final state as JSON.
     """
     if not OPENAI_API_KEY:
         raise HTTPException(
@@ -83,24 +70,20 @@ def analyze_job_match(body: AnalyzeRequest) -> AnalyzeResponse:
             detail="OPENAI_API_KEY is not configured. Add it to backend/.env.",
         )
 
-    # Step 1: deterministic matching (no tokens)
-    match_result = match_resume_to_jd(body.resume_text, body.jd_text)
+    # Initial state — nodes fill match_result, rewritten_bullets, final_report
+    initial_state = {
+        "resume_text": body.resume_text,
+        "jd_text": body.jd_text,
+    }
 
-    # Step 2: single LLM call for rewritten bullets
-    bullets = rewrite_resume_bullets(
-        resume_text=body.resume_text,
-        jd_text=body.jd_text,
-        matched_skills=match_result["matched_skills"],
-        missing_skills=match_result["missing_skills"],
-    )
+    final_state = analyze_graph.invoke(initial_state)
 
-    # Step 3: report uses match data + AI bullets (no extra LLM call)
-    report = generate_report(match_result, bullets)
+    match_result = final_state["match_result"]
 
     return AnalyzeResponse(
         match_score=match_result["match_score"],
         matched_skills=match_result["matched_skills"],
         missing_skills=match_result["missing_skills"],
-        rewritten_bullets=bullets,
-        final_report=report,
+        rewritten_bullets=final_state["rewritten_bullets"],
+        final_report=final_state["final_report"],
     )

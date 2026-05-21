@@ -6,6 +6,18 @@ Keeps route handlers thin and documents the JSON contract.
 from pydantic import BaseModel
 
 
+class RootResponse(BaseModel):
+    """Response body for GET /."""
+
+    message: str
+
+
+class HealthResponse(BaseModel):
+    """Response body for GET /health."""
+
+    status: str
+
+
 class AnalyzeRequest(BaseModel):
     """Body for POST /api/analyze."""
 
