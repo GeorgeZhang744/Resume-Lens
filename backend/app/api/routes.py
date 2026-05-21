@@ -199,10 +199,9 @@ def chat(body: ChatRequest) -> ChatResponse:
     (resume, JD, tool results) stored in the SQLite checkpoint. It picks
     up the thread and responds without needing any of that repeated.
 
-    Example follow-ups:
-      "Make the cover letter more formal."
-      "Add more detail about my Python experience in the bullets."
-      "What should I study first given my skill gaps?"
+    If the agent calls any tools this turn (e.g. rewrites bullets or the
+    cover letter), those results are returned in `updates` so the frontend
+    can patch the report in place.
     """
     if not OPENAI_API_KEY:
         raise HTTPException(
@@ -212,10 +211,42 @@ def chat(body: ChatRequest) -> ChatResponse:
 
     config = {"configurable": {"thread_id": body.thread_id}}
 
+    # Snapshot message count before invoking so we can isolate new messages
+    prior_state = analyze_graph.get_state(config)
+    prior_count = len(prior_state.values.get("messages", [])) if prior_state.values else 0
+
     final_state = analyze_graph.invoke(
         {"messages": [("human", body.message)]},
         config=config,
     )
 
-    reply = _get_agent_summary(final_state["messages"])
-    return ChatResponse(reply=reply or "I'm not sure how to help with that.")
+    all_messages = final_state["messages"]
+    reply = _get_agent_summary(all_messages)
+
+    # Only look at messages added this turn to avoid picking up tool results
+    # from the original analysis that are already displayed in the report
+    new_messages = all_messages[prior_count:]
+    new_tool_results = _extract_tool_results(new_messages)
+
+    # Map tool results to the fields they correspond to in AnalyzeResponse
+    updates: dict = {}
+
+    if "rewrite_resume_bullets_tool" in new_tool_results:
+        data = new_tool_results["rewrite_resume_bullets_tool"]
+        updates["rewritten_bullets"] = data.get("bullets", [])
+        updates["critique_score"]    = data.get("quality_score", 0)
+
+    if "write_cover_letter_tool" in new_tool_results:
+        data = new_tool_results["write_cover_letter_tool"]
+        updates["cover_letter"] = data.get("cover_letter", "")
+
+    if "prepare_interview_questions_tool" in new_tool_results:
+        data = new_tool_results["prepare_interview_questions_tool"]
+        updates["technical_questions"]  = data.get("technical_questions", [])
+        updates["behavioral_questions"] = data.get("behavioral_questions", [])
+        updates["study_topics"]         = data.get("study_topics", [])
+
+    return ChatResponse(
+        reply=reply or "I'm not sure how to help with that.",
+        updates=updates,
+    )

@@ -49,9 +49,15 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    """JSON returned from POST /api/chat."""
+    """JSON returned from POST /api/chat.
+
+    updates is a partial AnalyzeResponse — only the fields that the agent
+    actually rewrote this turn are present. Empty dict means the agent just
+    answered a question without calling any tools.
+    """
 
     reply: str
+    updates: dict = {}
 
 
 class ResumeParseResponse(BaseModel):

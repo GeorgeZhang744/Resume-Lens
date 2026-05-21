@@ -12,10 +12,11 @@
 import { useEffect, useRef, useState } from "react";
 
 import { sendChatMessage } from "@/lib/api";
-import type { ChatMessage } from "@/lib/types";
+import type { AnalyzeResponse, ChatMessage } from "@/lib/types";
 
 interface ChatPanelProps {
   threadId: string;
+  onUpdate: (updates: Partial<AnalyzeResponse>) => void;
 }
 
 const SUGGESTIONS = [
@@ -24,7 +25,7 @@ const SUGGESTIONS = [
   "Which skill gap should I focus on first?",
 ];
 
-export default function ChatPanel({ threadId }: ChatPanelProps) {
+export default function ChatPanel({ threadId, onUpdate }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -46,11 +47,14 @@ export default function ChatPanel({ threadId }: ChatPanelProps) {
     setIsLoading(true);
 
     try {
-      const { reply } = await sendChatMessage({
+      const { reply, updates } = await sendChatMessage({
         thread_id: threadId,
         message: messageText,
       });
       setMessages((prev) => [...prev, { role: "agent", text: reply }]);
+      if (Object.keys(updates).length > 0) {
+        onUpdate(updates);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {

@@ -12,6 +12,16 @@ import type { AnalyzeResponse } from "@/lib/types";
 
 interface ResultCardProps {
   result: AnalyzeResponse;
+  updatedSections: Set<keyof AnalyzeResponse>;
+}
+
+function updatedClass(
+  updatedSections: Set<keyof AnalyzeResponse>,
+  ...keys: (keyof AnalyzeResponse)[]
+): string {
+  return keys.some((k) => updatedSections.has(k))
+    ? "rounded-lg ring-2 ring-amber-300 ring-offset-2 transition-all duration-700"
+    : "";
 }
 
 function SkillList({
@@ -101,7 +111,7 @@ function CoverLetterCard({ text }: { text: string }) {
   );
 }
 
-export default function ResultCard({ result }: ResultCardProps) {
+export default function ResultCard({ result, updatedSections }: ResultCardProps) {
   const [exporting, setExporting] = useState(false);
 
   async function handleExport() {
@@ -150,7 +160,7 @@ export default function ResultCard({ result }: ResultCardProps) {
           variant="missing"
         />
 
-        <div>
+        <div className={updatedClass(updatedSections, "rewritten_bullets", "critique_score")}>
           <div className="mb-2 flex items-center gap-3">
             <h3 className="text-sm font-semibold text-zinc-800">
               Rewritten Bullets
@@ -169,13 +179,15 @@ export default function ResultCard({ result }: ResultCardProps) {
         </div>
 
         {result.cover_letter && (
-          <CoverLetterCard text={result.cover_letter} />
+          <div className={updatedClass(updatedSections, "cover_letter")}>
+            <CoverLetterCard text={result.cover_letter} />
+          </div>
         )}
 
         {(result.technical_questions.length > 0 ||
           result.behavioral_questions.length > 0 ||
           result.study_topics.length > 0) && (
-          <div>
+          <div className={updatedClass(updatedSections, "technical_questions", "behavioral_questions", "study_topics")}>
             <h3 className="mb-3 text-sm font-semibold text-zinc-800">
               Interview Prep
             </h3>

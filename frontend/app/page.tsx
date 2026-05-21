@@ -25,6 +25,8 @@ import ResumeUploader from "@/components/ResumeUploader";
 import { analyzeJobMatch } from "@/lib/api";
 import type { AnalyzeResponse } from "@/lib/types";
 
+type UpdatedSections = Set<keyof AnalyzeResponse>;
+
 const MIN_TEXT_LENGTH = 30;
 
 export default function Home() {
@@ -34,6 +36,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalyzeResponse | null>(null);
+  const [updatedSections, setUpdatedSections] = useState<UpdatedSections>(new Set());
 
   const resumeValid = resumeText.trim().length >= MIN_TEXT_LENGTH;
   const jdValid = jdText.trim().length >= MIN_TEXT_LENGTH;
@@ -44,6 +47,13 @@ export default function Home() {
     setResumeFilename(filename);
     setResult(null);
     setError(null);
+  }
+
+  function handleUpdate(updates: Partial<AnalyzeResponse>) {
+    setResult((prev) => (prev ? { ...prev, ...updates } : prev));
+    setUpdatedSections(new Set(Object.keys(updates) as (keyof AnalyzeResponse)[]));
+    // Clear highlights after 1.5 s
+    setTimeout(() => setUpdatedSections(new Set()), 1500);
   }
 
   async function handleAnalyze() {
@@ -143,9 +153,9 @@ export default function Home() {
         {/* Results — report on the left, chat pinned to the right */}
         {result && (
           <div className="mt-8 grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_480px]">
-            <ResultCard result={result} />
+            <ResultCard result={result} updatedSections={updatedSections} />
             <div className="sticky top-6">
-              <ChatPanel threadId={result.thread_id} />
+              <ChatPanel threadId={result.thread_id} onUpdate={handleUpdate} />
             </div>
           </div>
         )}
