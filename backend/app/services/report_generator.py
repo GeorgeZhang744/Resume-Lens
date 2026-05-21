@@ -6,13 +6,17 @@ Build a markdown-style text report from match results and bullets.
 def generate_report(
     match_result: dict,
     rewritten_bullets: list[str],
+    llm_success: bool = True,
+    cover_letter: str = "",
+    cover_letter_success: bool = True,
 ) -> str:
     """
     Assemble a readable report for the frontend / API response.
 
     Args:
-        match_result: Output from match_resume_to_jd (display-name lists).
-        rewritten_bullets: Template bullets from bullet_rewriter.
+        match_result: Output from match_resume_to_jd.
+        rewritten_bullets: Bullets from LLM or fallback generator.
+        llm_success: False when fallback bullets were used.
     """
     score = match_result["match_score"]
     matched = match_result["matched_skills"]
@@ -29,6 +33,11 @@ def generate_report(
     bullet_lines = "\n".join(f"- {b}" for b in rewritten_bullets)
 
     improvements: list[str] = []
+    if not llm_success:
+        improvements.append(
+            "AI optimization temporarily unavailable. "
+            "Fallback resume suggestions were generated."
+        )
     if missing:
         improvements.append(
             f"Add project examples that mention: {', '.join(missing[:5])}."
@@ -50,20 +59,37 @@ def generate_report(
 
     improvement_text = "\n".join(f"- {line}" for line in improvements)
 
+    fallback_notice = ""
+    if not llm_success:
+        fallback_notice = (
+            "_AI optimization temporarily unavailable. "
+            "Fallback resume suggestions were generated._\n\n"
+        )
+
+    cover_letter_section = ""
+    if cover_letter:
+        cl_notice = (
+            "_AI cover letter generation was temporarily unavailable. "
+            "A fallback draft was generated._\n\n"
+            if not cover_letter_success
+            else ""
+        )
+        cover_letter_section = f"\n## Cover Letter\n{cl_notice}{cover_letter}\n"
+
     return f"""# Job Match Report
 
-                ## Match Score
-                **{score} / 100**
+{fallback_notice}## Match Score
+**{score} / 100**
 
-                ## Matched Skills
-                {matched_lines}
+## Matched Skills
+{matched_lines}
 
-                ## Missing Skills
-                {missing_lines}
+## Missing Skills
+{missing_lines}
 
-                ## Suggested Improvements
-                {improvement_text}
+## Suggested Improvements
+{improvement_text}
 
-                ## Rewritten Resume Bullets
-                {bullet_lines}
-            """
+## Rewritten Resume Bullets
+{bullet_lines}
+{cover_letter_section}"""

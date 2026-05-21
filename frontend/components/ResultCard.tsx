@@ -1,7 +1,11 @@
+"use client";
+
 /**
  * Displays analyze API results in a readable layout.
  * Receives typed data only — no fetching logic here.
  */
+
+import { useState } from "react";
 
 import type { AnalyzeResponse } from "@/lib/types";
 
@@ -42,6 +46,34 @@ function SkillList({
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+function CoverLetterCard({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-zinc-800">Cover Letter</h3>
+        <button
+          onClick={handleCopy}
+          className="rounded-md px-3 py-1 text-xs font-medium text-zinc-500 ring-1 ring-inset ring-zinc-200 transition hover:bg-zinc-50 hover:text-zinc-700"
+        >
+          {copied ? "Copied!" : "Copy"}
+        </button>
+      </div>
+      <div className="whitespace-pre-wrap rounded-lg bg-zinc-50 p-4 text-sm leading-relaxed text-zinc-700">
+        {text}
+      </div>
     </div>
   );
 }
@@ -87,14 +119,9 @@ export default function ResultCard({ result }: ResultCardProps) {
           </ul>
         </div>
 
-        <div>
-          <h3 className="mb-2 text-sm font-semibold text-zinc-800">
-            Final Report
-          </h3>
-          <p className="rounded-lg bg-zinc-50 p-4 text-sm leading-relaxed text-zinc-700">
-            {result.final_report}
-          </p>
-        </div>
+        {result.cover_letter && (
+          <CoverLetterCard text={result.cover_letter} />
+        )}
       </div>
     </section>
   );

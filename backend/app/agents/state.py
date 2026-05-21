@@ -16,6 +16,7 @@ class AgentState(TypedDict, total=False):
 
     Required inputs: resume_text, jd_text
     Filled by nodes: match_result, rewritten_bullets, final_report
+    Reliability: llm_success, errors
     """
 
     # Inputs (set by API route before invoke)
@@ -25,7 +26,10 @@ class AgentState(TypedDict, total=False):
     # Outputs (set step by step)
     match_result: MatchResult
     rewritten_bullets: list[str]
+    cover_letter: str
     final_report: str
 
-    # Optional: collect non-fatal issues from nodes
+    # Reliability tracking
+    llm_success: bool
+    cover_letter_success: bool
     errors: list[str]

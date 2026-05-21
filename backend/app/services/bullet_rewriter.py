@@ -1,85 +1,65 @@
 """
-AI-powered resume bullet rewriting (single LLM call per analyze request).
+AI-powered resume bullet rewriting (single structured LLM call per analyze).
 
-Rule-based matching stays in matcher.py — this module only rewrites bullets.
+Returns bullets plus llm_success / errors for LangGraph state tracking.
 """
 
-import re
+from typing import TypedDict
 
+from pydantic import ValidationError
+
+from app.api.schemas import BulletRewriteResponse
 from app.prompts.bullet_rewrite_prompt import (
     SYSTEM_PROMPT,
     build_bullet_rewrite_prompt,
 )
-from app.services.llm_service import generate_text
-
-# Matches: "- bullet 1", "- bullet 1: text", "- text"
-_BULLET_LINE = re.compile(
-    r"^[-*]\s*(?:bullet\s*\d+\s*[:\-.]?\s*)?(.+)$",
-    re.IGNORECASE,
-)
-_BULLET_PREFIX = re.compile(r"^bullet\s*\d+\s*[:\-.]?\s*", re.IGNORECASE)
+from app.services.llm_service import LLMServiceError, generate_json
 
 
-def _clean_bullet_text(text: str) -> str:
-    """Strip leftover 'bullet 1:' labels from captured text."""
-    cleaned = _BULLET_PREFIX.sub("", text).strip()
-    return cleaned or text.strip()
+class RewriteBulletsResult(TypedDict):
+    """Result passed from rewrite service to the LangGraph rewrite node."""
+
+    rewritten_bullets: list[str]
+    llm_success: bool
+    errors: list[str]
 
 
-def _parse_bullets(raw_response: str) -> list[str]:
-    """
-    Parse LLM output into a list of bullet strings.
-
-    Expected format:
-    - bullet 1
-    - bullet 2
-    """
-    bullets: list[str] = []
-
-    for line in raw_response.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-
-        match = _BULLET_LINE.match(line)
-        if match:
-            text = _clean_bullet_text(match.group(1))
-            if text and not re.fullmatch(r"bullet\s*\d+", text, re.I):
-                bullets.append(text)
-            continue
-
-        # Fallback: numbered list "1. text"
-        numbered = re.match(r"^\d+[\.\)]\s+(.+)$", line)
-        if numbered:
-            bullets.append(numbered.group(1).strip())
-
-    # Last resort: use non-empty lines if model ignored format
-    if not bullets:
-        bullets = [line.strip() for line in raw_response.splitlines() if line.strip()]
-
-    return bullets[:5]
-
-
-def _fallback_bullets(
+def generate_fallback_bullets(
     matched_skills: list[str],
     missing_skills: list[str],
 ) -> list[str]:
-    """Simple templates if the LLM call fails (keeps the API usable)."""
+    """
+    Professional template bullets when the LLM or validation fails.
+
+    Still references real matched/missing skills from rule-based matching.
+    """
     bullets: list[str] = []
+
     if matched_skills:
-        skills = ", ".join(matched_skills[:3])
+        lead = ", ".join(matched_skills[:3])
         bullets.append(
-            f"Highlighted {skills} experience aligned with the target role requirements."
+            f"Delivered production features using {lead}, directly aligning with "
+            "the role's core technical requirements."
         )
+        if len(matched_skills) >= 2:
+            bullets.append(
+                f"Applied {matched_skills[0]} and {matched_skills[1]} to ship "
+                "reliable solutions with measurable impact on team delivery goals."
+            )
+
     if missing_skills:
         gaps = ", ".join(missing_skills[:3])
         bullets.append(
-            f"Strengthen resume examples demonstrating {gaps} where accurate experience exists."
+            f"Where accurate, expand resume examples highlighting {gaps} "
+            "to improve ATS match and interview relevance."
         )
+
     if not bullets:
         bullets.append(
-            "Add quantified, action-oriented bullets that mirror keywords from the job description."
+            "Translate job-description keywords into quantified, action-oriented "
+            "bullets grounded in your actual project experience."
         )
+
     return bullets[:3]
 
 
@@ -88,15 +68,13 @@ def rewrite_resume_bullets(
     jd_text: str,
     matched_skills: list[str],
     missing_skills: list[str],
-) -> list[str]:
+) -> RewriteBulletsResult:
     """
-    Rewrite resume bullets via one OpenAI call.
+    Rewrite bullets via structured JSON + Pydantic validation.
 
-    Workflow:
-    1. build_bullet_rewrite_prompt() → user message
-    2. generate_text() → raw LLM response
-    3. _parse_bullets() → list[str]
+    On API, JSON, or validation failure → fallback bullets, llm_success=False.
     """
+    errors: list[str] = []
     user_prompt = build_bullet_rewrite_prompt(
         resume_text=resume_text,
         jd_text=jd_text,
@@ -105,16 +83,30 @@ def rewrite_resume_bullets(
     )
 
     try:
-        raw = generate_text(
+        raw_json = generate_json(
             system_prompt=SYSTEM_PROMPT,
             user_prompt=user_prompt,
             temperature=0.3,
         )
-        bullets = _parse_bullets(raw)
-        if bullets:
-            return bullets
-    except (ValueError, RuntimeError):
-        # Missing key or API error — return safe fallback bullets
-        pass
+        validated = BulletRewriteResponse.model_validate(raw_json)
+        return {
+            "rewritten_bullets": validated.rewritten_bullets,
+            "llm_success": True,
+            "errors": [],
+        }
+    except ValidationError as exc:
+        errors.append(f"Schema validation failed: {exc}")
+    except LLMServiceError as exc:
+        errors.append(str(exc))
+    except ValueError as exc:
+        errors.append(f"Configuration error: {exc}")
+    except Exception as exc:
+        errors.append(f"Unexpected rewrite error: {exc}")
 
-    return _fallback_bullets(matched_skills, missing_skills)
+    return {
+        "rewritten_bullets": generate_fallback_bullets(
+            matched_skills, missing_skills
+        ),
+        "llm_success": False,
+        "errors": errors,
+    }

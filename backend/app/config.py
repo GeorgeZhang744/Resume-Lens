@@ -21,3 +21,7 @@ OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 # Prompt size guard — keeps a single LLM call cheap
 MAX_RESUME_CHARS: int = int(os.getenv("MAX_RESUME_CHARS", "4000"))
 MAX_JD_CHARS: int = int(os.getenv("MAX_JD_CHARS", "4000"))
+
+# OpenAI request timeout (seconds) and JSON retry attempts (1 retry = 2 total tries)
+LLM_TIMEOUT_SECONDS: float = float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
+LLM_JSON_MAX_RETRIES: int = int(os.getenv("LLM_JSON_MAX_RETRIES", "1"))

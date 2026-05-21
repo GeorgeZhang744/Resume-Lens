@@ -1,7 +1,7 @@
 """
 Prompts for AI resume bullet rewriting.
 
-Prompt text lives here — not in bullet_rewriter.py — so it is easy to tune.
+The model must return pure JSON matching BulletRewriteResponse in schemas.py.
 """
 
 from app.config import MAX_JD_CHARS, MAX_RESUME_CHARS
@@ -10,21 +10,21 @@ SYSTEM_PROMPT = """You are an expert resume writer and ATS optimization coach.
 
 Rewrite resume bullets for a specific job description.
 
-Rules:
+Content rules:
 - Use strong action verbs (Led, Built, Delivered, Improved, etc.)
 - Align wording with the target job description and ATS keywords
 - Emphasize matched skills naturally; do not keyword-stuff
 - NEVER invent employers, titles, dates, metrics, or tools not supported by the resume
 - If the resume lacks detail, write conservative bullets that could apply without lying
-- Each bullet: one line, concise, impact-oriented; add numbers only if implied by the resume
-- Output 3 to 5 bullets maximum
+- Each bullet: one concise line; add numbers only if implied by the resume
+- Provide 3 to 5 bullets inside the JSON array
 
-Output format (exactly):
-- bullet 1
-- bullet 2
-- bullet 3
+OUTPUT RULES (critical):
+- Return ONLY valid JSON — no markdown, no code fences, no explanations
+- Do not include any text before or after the JSON object
+- Use exactly this schema:
 
-Use that list format only. No intro, no conclusion, no markdown headers."""
+{"rewritten_bullets": ["bullet text 1", "bullet text 2", "bullet text 3"]}"""
 
 
 def _truncate(text: str, max_chars: int) -> str:
@@ -41,11 +41,7 @@ def build_bullet_rewrite_prompt(
     matched_skills: list[str],
     missing_skills: list[str],
 ) -> str:
-    """
-    Build the user message sent with SYSTEM_PROMPT to the LLM.
-
-    Includes only what is needed for rewriting (not full scoring logic).
-    """
+    """Build the user message for structured JSON bullet rewriting."""
     resume = _truncate(resume_text, MAX_RESUME_CHARS)
     jd = _truncate(jd_text, MAX_JD_CHARS)
 
@@ -54,19 +50,14 @@ def build_bullet_rewrite_prompt(
 
     return f"""Rewrite resume bullets for this job application.
 
-## Resume (source facts — do not invent beyond this)
+Resume (source facts — do not invent beyond this):
 {resume}
 
-## Job description
+Job description:
 {jd}
 
-## Skills already matched (weave in naturally)
-{matched}
+Skills already matched (weave in naturally): {matched}
+Skills in JD but weak/absent on resume: {missing}
 
-## Skills in JD but weak/absent on resume (only suggest if resume has related experience)
-{missing}
-
-Return 3–5 bullets using the required list format:
-- bullet 1
-- bullet 2
-- bullet 3"""
+Respond with ONLY a JSON object in this exact shape (3–5 bullets in the array):
+{{"rewritten_bullets": ["...", "...", "..."]}}"""

@@ -85,5 +85,6 @@ def analyze_job_match(body: AnalyzeRequest) -> AnalyzeResponse:
         matched_skills=match_result["matched_skills"],
         missing_skills=match_result["missing_skills"],
         rewritten_bullets=final_state["rewritten_bullets"],
+        cover_letter=final_state.get("cover_letter", ""),
         final_report=final_state["final_report"],
     )
