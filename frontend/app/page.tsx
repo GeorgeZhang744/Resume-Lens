@@ -18,6 +18,7 @@
 import { useState } from "react";
 
 import AnalyzeButton from "@/components/AnalyzeButton";
+import ChatPanel from "@/components/ChatPanel";
 import JDInput from "@/components/JDInput";
 import ResultCard from "@/components/ResultCard";
 import ResumeUploader from "@/components/ResumeUploader";
@@ -80,7 +81,9 @@ export default function Home() {
 
   return (
     <div className="min-h-full bg-zinc-50">
-      <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+      <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+
+        {/* Input form */}
         <header className="mb-8">
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
             AI Job Match Agent
@@ -137,9 +140,13 @@ export default function Home() {
           )}
         </div>
 
+        {/* Results — report on the left, chat pinned to the right */}
         {result && (
-          <div className="mt-8">
+          <div className="mt-8 grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_480px]">
             <ResultCard result={result} />
+            <div className="sticky top-6">
+              <ChatPanel threadId={result.thread_id} />
+            </div>
           </div>
         )}
       </main>

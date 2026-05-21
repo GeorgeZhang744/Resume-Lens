@@ -28,6 +28,7 @@ class AnalyzeRequest(BaseModel):
 class AnalyzeResponse(BaseModel):
     """JSON returned to the frontend after analysis."""
 
+    thread_id: str
     match_score: int
     matched_skills: list[str]
     missing_skills: list[str]
@@ -38,6 +39,19 @@ class AnalyzeResponse(BaseModel):
     behavioral_questions: list[str]
     study_topics: list[str]
     final_report: str
+
+
+class ChatRequest(BaseModel):
+    """Body for POST /api/chat."""
+
+    thread_id: str
+    message: str
+
+
+class ChatResponse(BaseModel):
+    """JSON returned from POST /api/chat."""
+
+    reply: str
 
 
 class ResumeParseResponse(BaseModel):
