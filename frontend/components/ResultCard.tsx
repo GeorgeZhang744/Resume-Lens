@@ -160,23 +160,25 @@ export default function ResultCard({ result, updatedSections }: ResultCardProps)
           variant="missing"
         />
 
-        <div className={updatedClass(updatedSections, "rewritten_bullets", "critique_score")}>
-          <div className="mb-2 flex items-center gap-3">
-            <h3 className="text-sm font-semibold text-zinc-800">
-              Rewritten Bullets
-            </h3>
-            {result.critique_score > 0 && (
-              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
-                AI quality score: {result.critique_score}/10
-              </span>
-            )}
+        {result.rewritten_bullets.length > 0 && (
+          <div className={updatedClass(updatedSections, "rewritten_bullets", "critique_score")}>
+            <div className="mb-2 flex items-center gap-3">
+              <h3 className="text-sm font-semibold text-zinc-800">
+                Rewritten Bullets
+              </h3>
+              {result.critique_score > 0 && (
+                <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
+                  AI quality score: {result.critique_score}/10
+                </span>
+              )}
+            </div>
+            <ul className="list-disc space-y-2 pl-5 text-sm text-zinc-700">
+              {result.rewritten_bullets.map((bullet, index) => (
+                <li key={`${index}-${bullet.slice(0, 24)}`}>{bullet}</li>
+              ))}
+            </ul>
           </div>
-          <ul className="list-disc space-y-2 pl-5 text-sm text-zinc-700">
-            {result.rewritten_bullets.map((bullet, index) => (
-              <li key={`${index}-${bullet.slice(0, 24)}`}>{bullet}</li>
-            ))}
-          </ul>
-        </div>
+        )}
 
         {result.cover_letter && (
           <div className={updatedClass(updatedSections, "cover_letter")}>

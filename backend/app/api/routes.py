@@ -148,9 +148,25 @@ def analyze_job_match(body: AnalyzeRequest) -> AnalyzeResponse:
             detail="OPENAI_API_KEY is not configured. Add it to backend/.env.",
         )
 
-    # Single natural-language goal — the agent decides how to handle it
+    # Map service names to the tool names the agent knows
+    _TOOL_MAP = {
+        "rewrite_bullets": "rewrite_resume_bullets_tool",
+        "cover_letter":    "write_cover_letter_tool",
+        "interview_prep":  "prepare_interview_questions_tool",
+    }
+
+    # Skill match always runs; add whichever optional services were requested
+    selected_tools = ["analyze_resume_match"] + [
+        _TOOL_MAP[s] for s in body.sections if s in _TOOL_MAP
+    ]
+
+    tools_instruction = (
+        f"Only call these tools: {', '.join(selected_tools)}. "
+        "Do NOT call any tools that are not in this list."
+    )
+
     goal_message = (
-        "Analyze this job application.\n\n"
+        f"Analyze this job application.\n{tools_instruction}\n\n"
         f"Resume:\n{body.resume_text}\n\n"
         f"Job Description:\n{body.jd_text}"
     )
@@ -215,8 +231,20 @@ def chat(body: ChatRequest) -> ChatResponse:
     prior_state = analyze_graph.get_state(config)
     prior_count = len(prior_state.values.get("messages", [])) if prior_state.values else 0
 
+    # Prepend a tool-use reminder so the agent calls the right tool instead of
+    # just describing the change in text. Questions ("what should I study?") are
+    # unaffected — the agent only calls tools when an actual modification is needed.
+    augmented_message = (
+        "REMINDER: If this request asks you to modify or rewrite any part of "
+        "the report (bullets, cover letter, or interview questions), you MUST "
+        "call the appropriate tool (rewrite_resume_bullets_tool, "
+        "write_cover_letter_tool, or prepare_interview_questions_tool) to apply "
+        "the change. Do not describe the change in text — call the tool.\n\n"
+        f"User request: {body.message}"
+    )
+
     final_state = analyze_graph.invoke(
-        {"messages": [("human", body.message)]},
+        {"messages": [("human", augmented_message)]},
         config=config,
     )
 

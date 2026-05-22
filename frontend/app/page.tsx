@@ -15,15 +15,17 @@
  * 3. Analyze → analyzeJobMatch({ resume_text, jd_text })
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import AnalyzeButton from "@/components/AnalyzeButton";
 import ChatPanel from "@/components/ChatPanel";
 import JDInput from "@/components/JDInput";
 import ResultCard from "@/components/ResultCard";
 import ResumeUploader from "@/components/ResumeUploader";
+import SectionPicker from "@/components/SectionPicker";
 import { analyzeJobMatch } from "@/lib/api";
-import type { AnalyzeResponse } from "@/lib/types";
+import type { AnalyzeResponse, Section } from "@/lib/types";
+import { ALL_SECTIONS } from "@/lib/types";
 
 type UpdatedSections = Set<keyof AnalyzeResponse>;
 
@@ -33,9 +35,11 @@ export default function Home() {
   const [resumeText, setResumeText] = useState("");
   const [resumeFilename, setResumeFilename] = useState<string | null>(null);
   const [jdText, setJdText] = useState("");
+  const [selectedSections, setSelectedSections] = useState<Section[]>(ALL_SECTIONS);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalyzeResponse | null>(null);
+  const [previousResult, setPreviousResult] = useState<AnalyzeResponse | null>(null);
   const [updatedSections, setUpdatedSections] = useState<UpdatedSections>(new Set());
 
   const resumeValid = resumeText.trim().length >= MIN_TEXT_LENGTH;
@@ -49,12 +53,30 @@ export default function Home() {
     setError(null);
   }
 
+  // Clear highlights on any click while sections are highlighted
+  useEffect(() => {
+    if (updatedSections.size === 0) return;
+    function clear() { setUpdatedSections(new Set()); }
+    document.addEventListener("click", clear);
+    return () => document.removeEventListener("click", clear);
+  }, [updatedSections.size]);
+
   function handleUpdate(updates: Partial<AnalyzeResponse>) {
-    setResult((prev) => (prev ? { ...prev, ...updates } : prev));
+    // Save current result before overwriting — enables one-level undo
+    setResult((prev) => {
+      setPreviousResult(prev);
+      return prev ? { ...prev, ...updates } : prev;
+    });
     setUpdatedSections(new Set(Object.keys(updates) as (keyof AnalyzeResponse)[]));
-    // Clear highlights after 1.5 s
-    setTimeout(() => setUpdatedSections(new Set()), 1500);
   }
+
+  function handleUndo() {
+    if (!previousResult) return;
+    setResult(previousResult);
+    setPreviousResult(null);
+    setUpdatedSections(new Set());
+  }
+
 
   async function handleAnalyze() {
     setError(null);
@@ -78,6 +100,7 @@ export default function Home() {
       const data = await analyzeJobMatch({
         resume_text: resumeText.trim(),
         jd_text: jdText.trim(),
+        sections: selectedSections,
       });
       setResult(data);
     } catch (err) {
@@ -127,17 +150,27 @@ export default function Home() {
             minLength={MIN_TEXT_LENGTH}
           />
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <AnalyzeButton
-              onClick={handleAnalyze}
-              isLoading={isLoading}
-              disabled={!canSubmit}
-            />
-            {isLoading && (
-              <p className="text-sm text-zinc-500" role="status">
-                Analyzing your resume against the job description…
-              </p>
-            )}
+          <SectionPicker
+            selected={selectedSections}
+            onChange={setSelectedSections}
+          />
+
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <AnalyzeButton
+                onClick={handleAnalyze}
+                isLoading={isLoading}
+                disabled={!canSubmit}
+              />
+              {isLoading && (
+                <p className="text-sm text-zinc-500" role="status">
+                  Analyzing your resume…
+                </p>
+              )}
+            </div>
+            <p className="text-xs text-zinc-400">
+              Skill match runs automatically
+            </p>
           </div>
 
           {error && (
@@ -155,7 +188,12 @@ export default function Home() {
           <div className="mt-8 grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_480px]">
             <ResultCard result={result} updatedSections={updatedSections} />
             <div className="sticky top-6">
-              <ChatPanel threadId={result.thread_id} onUpdate={handleUpdate} />
+              <ChatPanel
+                threadId={result.thread_id}
+                onUpdate={handleUpdate}
+                canUndo={previousResult !== null}
+                onUndo={handleUndo}
+              />
             </div>
           </div>
         )}

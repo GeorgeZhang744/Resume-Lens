@@ -18,6 +18,8 @@ import type { AnalyzeResponse, ChatMessage } from "@/lib/types";
 interface ChatPanelProps {
   threadId: string;
   onUpdate: (updates: Partial<AnalyzeResponse>) => void;
+  canUndo: boolean;
+  onUndo: () => void;
 }
 
 const SUGGESTIONS = [
@@ -26,7 +28,7 @@ const SUGGESTIONS = [
   "Which skill gap should I focus on first?",
 ];
 
-export default function ChatPanel({ threadId, onUpdate }: ChatPanelProps) {
+export default function ChatPanel({ threadId, onUpdate, canUndo, onUndo }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -52,8 +54,12 @@ export default function ChatPanel({ threadId, onUpdate }: ChatPanelProps) {
         thread_id: threadId,
         message: messageText,
       });
-      setMessages((prev) => [...prev, { role: "agent", text: reply }]);
-      if (Object.keys(updates).length > 0) {
+      const hasUpdate = Object.keys(updates).length > 0;
+      setMessages((prev) => [
+        ...prev,
+        { role: "agent", text: reply, triggeredUpdate: hasUpdate },
+      ]);
+      if (hasUpdate) {
         onUpdate(updates);
       }
     } catch (err) {
@@ -100,11 +106,19 @@ export default function ChatPanel({ threadId, onUpdate }: ChatPanelProps) {
           </div>
         )}
 
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-          >
+        {messages.map((msg, i) => {
+          // Find the index of the last message that triggered an update
+          const lastUpdateIndex = messages.reduce(
+            (last, m, idx) => (m.triggeredUpdate ? idx : last),
+            -1
+          );
+          const showUndo = canUndo && msg.triggeredUpdate && i === lastUpdateIndex;
+
+          return (
+          <div key={i} className="flex flex-col gap-1">
+            <div
+              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+            >
             <div
               className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                 msg.role === "user"
@@ -130,8 +144,20 @@ export default function ChatPanel({ threadId, onUpdate }: ChatPanelProps) {
                 </ReactMarkdown>
               )}
             </div>
+            </div>
+            {showUndo && (
+              <div className="flex justify-start pl-1">
+                <button
+                  onClick={onUndo}
+                  className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 transition hover:bg-amber-100"
+                >
+                  ↩ Undo this change
+                </button>
+              </div>
+            )}
           </div>
-        ))}
+          );
+        })}
 
         {isLoading && (
           <div className="flex justify-start">

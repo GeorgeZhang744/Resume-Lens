@@ -19,10 +19,19 @@ class HealthResponse(BaseModel):
 
 
 class AnalyzeRequest(BaseModel):
-    """Body for POST /api/analyze."""
+    """Body for POST /api/analyze.
+
+    services controls which optional tools the agent runs. The skill match
+    analysis always runs regardless. Valid values:
+      "rewrite_bullets" — rewrite resume bullets with self-critique
+      "cover_letter"    — generate a tailored cover letter
+      "interview_prep"  — generate questions and study topics
+    Defaults to all three when omitted.
+    """
 
     resume_text: str
     jd_text: str
+    sections: list[str] = ["rewrite_bullets", "cover_letter", "interview_prep"]
 
 
 class AnalyzeResponse(BaseModel):

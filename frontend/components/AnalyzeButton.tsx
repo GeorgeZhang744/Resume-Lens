@@ -19,7 +19,7 @@ export default function AnalyzeButton({
       type="button"
       onClick={onClick}
       disabled={disabled || isLoading}
-      className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-900 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+      className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-900 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
     >
       {isLoading && (
         <span
@@ -27,7 +27,7 @@ export default function AnalyzeButton({
           aria-hidden="true"
         />
       )}
-      {isLoading ? "Analyzing…" : "Analyze Match"}
+      {isLoading ? "Analyzing…" : "Analyze"}
     </button>
   );
 }
