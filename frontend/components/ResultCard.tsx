@@ -118,7 +118,7 @@ export default function ResultCard({ result, updatedSections }: ResultCardProps)
     setExporting(true);
     // Defer to next tick so the button state renders before the (sync) PDF work blocks
     await new Promise((r) => setTimeout(r, 0));
-    exportToPdf(result);
+    await exportToPdf(result);
     setExporting(false);
   }
 
