@@ -25,3 +25,6 @@ MAX_JD_CHARS: int = int(os.getenv("MAX_JD_CHARS", "4000"))
 # OpenAI request timeout (seconds) and JSON retry attempts (1 retry = 2 total tries)
 LLM_TIMEOUT_SECONDS: float = float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
 LLM_JSON_MAX_RETRIES: int = int(os.getenv("LLM_JSON_MAX_RETRIES", "1"))
+
+# JSearch (RapidAPI) — used for job recommendations
+RAPIDAPI_KEY: str = os.getenv("RAPIDAPI_KEY", "")

@@ -20,6 +20,7 @@ import { useEffect, useState } from "react";
 import AnalyzeButton from "@/components/AnalyzeButton";
 import ChatPanel from "@/components/ChatPanel";
 import JDInput from "@/components/JDInput";
+import RecommendedJobs from "@/components/RecommendedJobs";
 import ResultCard from "@/components/ResultCard";
 import ResumeUploader from "@/components/ResumeUploader";
 import SectionPicker from "@/components/SectionPicker";
@@ -41,6 +42,7 @@ export default function Home() {
   const [result, setResult] = useState<AnalyzeResponse | null>(null);
   const [previousResult, setPreviousResult] = useState<AnalyzeResponse | null>(null);
   const [updatedSections, setUpdatedSections] = useState<UpdatedSections>(new Set());
+  const [showJobs, setShowJobs] = useState(false);
 
   const resumeValid = resumeText.trim().length >= MIN_TEXT_LENGTH;
   const jdValid = jdText.trim().length >= MIN_TEXT_LENGTH;
@@ -51,6 +53,7 @@ export default function Home() {
     setResumeFilename(filename);
     setResult(null);
     setError(null);
+    setShowJobs(false);
   }
 
   // Clear highlights on any click while sections are highlighted
@@ -81,6 +84,7 @@ export default function Home() {
   async function handleAnalyze() {
     setError(null);
     setResult(null);
+    setShowJobs(false);
 
     if (!resumeText.trim()) {
       setError("Please upload a resume (PDF or DOCX) before analyzing.");
@@ -162,6 +166,14 @@ export default function Home() {
                 isLoading={isLoading}
                 disabled={!canSubmit}
               />
+              <button
+                type="button"
+                onClick={() => setShowJobs(true)}
+                disabled={!resumeValid || isLoading || showJobs}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-900 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Find Jobs
+              </button>
               {isLoading && (
                 <p className="text-sm text-zinc-500" role="status">
                   Analyzing your resume…
@@ -195,6 +207,13 @@ export default function Home() {
                 onUndo={handleUndo}
               />
             </div>
+          </div>
+        )}
+
+        {/* Job recommendations — shown only after user clicks "Find Jobs" */}
+        {showJobs && (
+          <div className="mt-6">
+            <RecommendedJobs resumeText={resumeText} />
           </div>
         )}
       </main>

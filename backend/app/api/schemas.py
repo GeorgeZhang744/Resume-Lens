@@ -132,6 +132,31 @@ class CoverLetterResponse(BaseModel):
         return v
 
 
+class JobSearchRequest(BaseModel):
+    """Body for POST /api/jobs."""
+
+    resume_text: str
+
+
+class JobResult(BaseModel):
+    """A single job listing returned by the job search."""
+
+    job_id: str
+    title: str
+    company: str
+    location: str
+    employment_type: str
+    apply_link: str
+    description: str
+    salary: str
+
+
+class JobSearchResponse(BaseModel):
+    """Response for POST /api/jobs."""
+
+    jobs: list[JobResult]
+
+
 class BulletRewriteResponse(BaseModel):
     """Validated shape of the LLM JSON response for bullet rewriting."""
 

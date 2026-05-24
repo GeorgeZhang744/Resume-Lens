@@ -10,7 +10,7 @@ them to the AnalyzeResponse schema.
 import json
 import uuid
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from langchain_core.messages import AIMessage, ToolMessage
 
 from app.agents.graph import analyze_graph
@@ -20,10 +20,15 @@ from app.api.schemas import (
     ChatRequest,
     ChatResponse,
     HealthResponse,
+    JobResult,
+    JobSearchRequest,
+    JobSearchResponse,
     ResumeParseResponse,
     RootResponse,
 )
-from app.config import OPENAI_API_KEY
+from app.config import OPENAI_API_KEY, RAPIDAPI_KEY
+from app.limiter import limiter
+from app.services.job_search import search_jobs
 from app.services.resume_parser import ResumeParseError, parse_resume_file
 
 root_router = APIRouter(tags=["root"])
@@ -109,7 +114,8 @@ def health_check() -> HealthResponse:
 
 
 @api_router.post("/resume/parse", response_model=ResumeParseResponse)
-async def parse_resume(file: UploadFile = File(...)) -> ResumeParseResponse:
+@limiter.limit("20/hour")
+async def parse_resume(request: Request, file: UploadFile = File(...)) -> ResumeParseResponse:
     """
     Accept a PDF or DOCX resume, extract text, return JSON for the frontend.
 
@@ -134,7 +140,8 @@ async def parse_resume(file: UploadFile = File(...)) -> ResumeParseResponse:
 
 
 @api_router.post("/analyze", response_model=AnalyzeResponse)
-def analyze_job_match(body: AnalyzeRequest) -> AnalyzeResponse:
+@limiter.limit("5/hour")
+def analyze_job_match(request: Request, body: AnalyzeRequest) -> AnalyzeResponse:
     """
     Invoke the tool-calling agent and return structured analysis results.
 
@@ -207,7 +214,8 @@ def analyze_job_match(body: AnalyzeRequest) -> AnalyzeResponse:
 
 
 @api_router.post("/chat", response_model=ChatResponse)
-def chat(body: ChatRequest) -> ChatResponse:
+@limiter.limit("30/hour")
+def chat(request: Request, body: ChatRequest) -> ChatResponse:
     """
     Send a follow-up message to an existing analysis thread.
 
@@ -278,3 +286,21 @@ def chat(body: ChatRequest) -> ChatResponse:
         reply=reply or "I'm not sure how to help with that.",
         updates=updates,
     )
+
+
+@api_router.post("/jobs", response_model=JobSearchResponse)
+@limiter.limit("10/hour")
+def get_job_recommendations(request: Request, body: JobSearchRequest) -> JobSearchResponse:
+    """
+    Return job recommendations derived directly from the resume text.
+
+    Uses a single LLM call to extract a search query (job title + key skills)
+    from the resume, then queries JSearch (RapidAPI). No analysis or JD needed.
+    Returns an empty list gracefully when RAPIDAPI_KEY is not configured or
+    either the LLM or JSearch call fails.
+    """
+    if not RAPIDAPI_KEY:
+        return JobSearchResponse(jobs=[])
+
+    raw_jobs = search_jobs(body.resume_text)
+    return JobSearchResponse(jobs=[JobResult(**j) for j in raw_jobs])
