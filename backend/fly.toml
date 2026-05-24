@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for resume-lens-backend on 2026-05-23T23:04:56-04:00
+# fly.toml app configuration file generated for resume-lens on 2026-05-24T03:14:33Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'resume-lens-backend'
+app = 'resume-lens'
 primary_region = 'ewr'
 
 [build]
@@ -17,6 +17,7 @@ primary_region = 'ewr'
   processes = ['app']
 
 [[vm]]
-  memory = '256mb'
+  memory = '1gb'
+  cpu_kind = 'shared'
   cpus = 1
   memory_mb = 256
