@@ -82,8 +82,7 @@ export default function ChatPanel({ threadId, onUpdate, canUndo, onUndo }: ChatP
       <div className="border-b border-zinc-100 px-6 py-4">
         <h2 className="text-lg font-semibold text-zinc-900">Follow-up Chat</h2>
         <p className="mt-0.5 text-xs text-zinc-500">
-          Ask the agent to refine any part of the analysis. It remembers your
-          full resume and job description.
+          Ask the agent to refine any part of the analysis.
         </p>
       </div>
 

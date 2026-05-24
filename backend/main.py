@@ -12,6 +12,7 @@ from slowapi.errors import RateLimitExceeded
 
 import app.config  # noqa: F401 — load .env before routes/services use settings
 from app.api.routes import api_router, root_router
+from app.config import ALLOWED_ORIGINS
 from app.limiter import limiter
 
 # Create the FastAPI application instance
@@ -24,7 +25,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # CORS: allow the frontend to call this API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -28,3 +28,11 @@ LLM_JSON_MAX_RETRIES: int = int(os.getenv("LLM_JSON_MAX_RETRIES", "1"))
 
 # JSearch (RapidAPI) — used for job recommendations
 RAPIDAPI_KEY: str = os.getenv("RAPIDAPI_KEY", "")
+
+# CORS — comma-separated list of allowed frontend origins
+# e.g. "https://resume-lens.vercel.app,http://localhost:3000"
+ALLOWED_ORIGINS: list[str] = [
+    o.strip()
+    for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+    if o.strip()
+]
