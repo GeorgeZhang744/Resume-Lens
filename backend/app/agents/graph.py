@@ -12,10 +12,10 @@ v2 — Tool-calling agent (this file):
      It decides which tools to call, in what order, and with what arguments.
      This is the inversion that makes it a genuine agent.
 
-v3 — Persistent checkpointer (current):
-     A SqliteSaver checkpointer is attached so every agent run is persisted to
-     checkpoints.db. routes.py passes a unique thread_id per request, keeping
-     each analysis independent while making the full message history replayable.
+v3 — In-memory checkpointer (current):
+     A MemorySaver checkpointer is attached so every agent run is stored in RAM.
+     routes.py passes a unique thread_id per request, keeping each analysis
+     independent. State is lost on server restart — no file or DB required.
 
 How it works
 ────────────
@@ -30,12 +30,9 @@ The self-critique loop is preserved — it lives inside rewrite_resume_bullets_t
 so bullet quality is always gate-checked regardless of which path the agent takes.
 """
 
-import sqlite3
-from pathlib import Path
-
 from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
 from app.agents.agent_tools import AGENT_TOOLS
@@ -86,14 +83,11 @@ _llm = ChatOpenAI(
     temperature=0.3,
 )
 
-# SQLite checkpointer ─────────────────────────────────────────────────────────
-# Persists the full message history for every agent run to checkpoints.db.
-# check_same_thread=False is required because FastAPI may dispatch requests
-# from different threads while sharing this single connection object.
-# The DB file lives at backend/checkpoints.db (already in .gitignore via *.db).
-_DB_PATH = Path(__file__).parent.parent.parent / "checkpoints.db"
-_conn = sqlite3.connect(str(_DB_PATH), check_same_thread=False)
-_checkpointer = SqliteSaver(_conn)
+# In-memory checkpointer ──────────────────────────────────────────────────────
+# Stores message history in RAM — no file or database required.
+# Chat sessions persist for the lifetime of the server process; state is lost
+# on restart, which is acceptable for a single-instance deployment.
+_checkpointer = MemorySaver()
 
 # The compiled agent — exported as analyze_graph so routes.py requires no
 # import changes. The checkpointer is transparent to callers: routes.py just
